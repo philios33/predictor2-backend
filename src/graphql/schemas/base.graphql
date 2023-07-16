@@ -1,0 +1,65 @@
+scalar void
+scalar JSON
+
+input MatchScoreInput {
+    tournamentId: String!
+    matchId: String!
+    homeGoals: Int!
+    awayGoals: Int!
+    isFinalScore: Boolean!
+    gameMinute: String
+}
+
+input ClearMatchScoreInput {
+    tournamentId: String!
+    matchId: String!
+}
+
+enum ScheduledStatus {
+    MATCH_ON
+    MATCH_POSTPONED
+    MATCH_ABANDONED
+    MATCH_CANCELLED
+    MATCH_DELETED
+}
+
+input ScheduledMatchInput {
+    tournamentId: String!
+    matchId: String!
+    homeTeamId: String!
+    awayTeamId: String!
+    stageId: String!
+    groupId: String!
+    scheduledKickoff: String!
+    status: ScheduledStatus!
+    statusMessage: String
+}
+
+input UserPredictionInput {
+    tournamentId: String!
+    matchId: String!
+    playerId: String!
+    homeGoals: Int!
+    awayGoals: Int!
+    isBanker: Boolean!
+}
+
+input ClearUserPredictionInput {
+    tournamentId: String!
+    matchId: String!
+    playerId: String!
+}
+
+type Mutation {
+    # These are the basic helper mutations to prove the concept
+    # We probably wont have these so exposed in the graphql service like this
+    setMatchScore(data: MatchScoreInput!): void
+    clearMatchScore(data: ClearMatchScoreInput!): void
+    setScheduledMatch(data: ScheduledMatchInput!): void
+    setUserPrediction(data: UserPredictionInput!): void
+    clearUserPrediction(data: ClearUserPredictionInput!): void
+}
+
+type Query {
+    hello: JSON!
+}
