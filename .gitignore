@@ -2,3 +2,6 @@
 /src/graphql/generated.ts
 /dist
 .env
+/mongo-data
+/redis-data
+notes.txt

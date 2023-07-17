@@ -44,6 +44,8 @@ export type SystemConfig = {
     orchestratorMongoUrl: string
     queuesRedisHost: string
     queuesRedisPort: number
+    queuesNamespace: string
+    codeVersionId: string
 }
 
 export function getSystemConfig() : SystemConfig {
@@ -51,6 +53,8 @@ export function getSystemConfig() : SystemConfig {
         orchestratorMongoUrl: obtainEnvVar("SYSTEM_ORCHESTRATION_MONGO_URL"),
         queuesRedisHost: obtainEnvVar("SYSTEM_QUEUES_REDIS_HOST"),
         queuesRedisPort: parseInt(obtainEnvVar("SYSTEM_QUEUES_REDIS_PORT")),
+        queuesNamespace: obtainEnvVar("SYSTEM_QUEUES_NAMESPACE"),
+        codeVersionId: obtainEnvVar("SYSTEM_CODE_VERSION_ID"),
     }
 }
 
@@ -62,8 +66,4 @@ export function getServiceConfig() : ServiceConfig {
     return {
         listenPort: parseInt(obtainEnvVar("SERVICE_LISTEN_PORT")),
     }
-}
-
-export function getCodeVersionId() : string {
-    return obtainEnvVar("CODE_VERSION_ID");
 }

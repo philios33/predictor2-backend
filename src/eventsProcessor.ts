@@ -5,15 +5,14 @@ import { RedisQueuesController, RedisStorageStateReader, RedisStorageStateWriter
 import { MessageProcessor } from './processors/messageProcessor';
 import { loadMessageHandlers } from './processors/messageHandlersUtil';
 import { MongoQueueSchedule } from './processors/schedules/mongoQueueSchedule';
-import { getCodeVersionId, getRedisStateConfig, getSystemConfig } from './config';
+import { getRedisStateConfig, getSystemConfig } from './config';
 
 const systemConfig = getSystemConfig();
-const codeVersionId = getCodeVersionId();
 const stateConfig = getRedisStateConfig();
 const instanceId = uuidv4();
 
 const queuesClient = new ReliableRedisClient("Queues - Processor " + instanceId, systemConfig.queuesRedisHost, systemConfig.queuesRedisPort);
-const queues = new RedisQueuesController(queuesClient, codeVersionId);
+const queues = new RedisQueuesController(queuesClient, systemConfig.queuesNamespace);
 
 const storageClient = new ReliableRedisClient("Storage - Processor " + instanceId, stateConfig.redisHost, stateConfig.redisPort);
 
@@ -24,7 +23,7 @@ const processor = new MessageProcessor(queues, reader, writer);
 
 loadMessageHandlers(processor);
 
-const scheduler = new MongoQueueSchedule(codeVersionId, systemConfig.orchestratorMongoUrl);
+const scheduler = new MongoQueueSchedule(systemConfig.orchestratorMongoUrl, systemConfig.codeVersionId);
 
 (async () => {
     try {

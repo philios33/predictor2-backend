@@ -12,7 +12,7 @@ import { OperationContext } from 'graphql-http';
 import { EventSourceConfig } from '../config';
 
 
-export interface GraphQLContext {
+export type GraphQLContext = {
     scheduleTopic: MongoRedisTopicProducer<ScheduleTopicMessage>,
     competitionTopic: MongoRedisTopicProducer<CompetitionTopicMessage>,
 }
@@ -36,9 +36,9 @@ export async function startupContext(config: EventSourceConfig): Promise<GraphQL
     }
 }
 
-async function loadContextFromRequest(req: any, context: GraphQLContext): Promise<OperationContext> {
-    // return context;
-    return {};
+async function loadContextFromRequest(req: any, context: GraphQLContext): Promise<GraphQLContext> {
+    console.log("Using context");
+    return context;
 }
 
 export default function(context: GraphQLContext) {
@@ -59,5 +59,9 @@ export default function(context: GraphQLContext) {
         context: async (req, params) => {
             return await loadContextFromRequest(req, context);
         },
+        formatError: (e: any) => {
+            console.error(e);
+            return e;
+        }
     })
 }

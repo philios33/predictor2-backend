@@ -5,14 +5,14 @@ import { System } from "./system";
 import { RedisQueuesController, RedisStorageProcessor, RedisStorageStateReader, RedisStorageStateWriter, ReliableRedisClient } from "redis-state-management";
 
 const codeVersionId = "1.0";
-
 const redisHost = "localhost";
 const redisPort = 6379;
 
 // Note: These two will be replaced by the exported classes from redis-state-management
-const rrc = new ReliableRedisClient("Test", redisHost, redisPort);
+const rrc = new ReliableRedisClient("Baseliner queues", redisHost, redisPort);
 
 const queues = new RedisQueuesController(rrc, codeVersionId);
+
 
 const reader = new RedisStorageStateReader(rrc, "TEST");
 const writer = new RedisStorageStateWriter(rrc, "TEST", "writerIncoming");
@@ -22,13 +22,14 @@ const processor = new MessageProcessor(queues, reader, writer);
 
 loadMessageHandlers(processor);
 
-const schedule = new MongoQueueSchedule(codeVersionId, "mongodb://localhost:27017/scheduler");
+
+const schedule = new MongoQueueSchedule("mongodb://localhost:27017/scheduler", codeVersionId);
 
 const system = new System(queues, schedule);
 
 (async () => {
     await rrc.start();
-    await stateProcessor.start();
+    // await stateProcessor.start();
 
     // Init data messages down queues
     await system.addTournament("PL2223", "Premier League 2022-23");
@@ -57,8 +58,10 @@ const system = new System(queues, schedule);
     });
     await system.addScore("PL2223", "ARSAST", 0, 2);
 
+    
     await schedule.startup();
     processor.startProcessing(schedule);
+    
 
 })();
 

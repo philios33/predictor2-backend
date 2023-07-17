@@ -1,6 +1,10 @@
 import { IResolvers } from "@graphql-tools/utils";
 import { GraphQLContext } from "../express";
-import { MutationClearMatchScoreArgs, MutationClearUserPredictionArgs, MutationSetMatchScoreArgs, MutationSetScheduledMatchArgs, MutationSetUserPredictionArgs } from "../generated";
+import { MutationAddTournamentArgs, MutationClearMatchScoreArgs, MutationClearUserPredictionArgs, MutationSetMatchScoreArgs, MutationSetScheduledMatchArgs, MutationSetUserPredictionArgs } from "../generated";
+import { MutationAddTeamArgs } from "../generated";
+import { MutationAddPlayerArgs } from "../generated";
+import { MutationAddCompetitionArgs } from "../generated";
+import { MutationAddPlayerCompetingArgs } from "../generated";
 
 export const BaseResolver: IResolvers = {
     Query: {
@@ -10,6 +14,67 @@ export const BaseResolver: IResolvers = {
         }
     },
     Mutation: {
+        async addTournament(_obj, args: MutationAddTournamentArgs, context: GraphQLContext): Promise<void> {
+            // TODO Validate input, user and auth
+            const logCompactId = "TOURNAMENT_" + args.data.tournamentId;
+            const now = new Date().toISOString();
+            await context.scheduleTopic.pushMessageToTopic({
+                type: "TOURNAMENT",
+                meta: {
+                    ...args.data
+                },
+                occurredAt: now,
+            }, logCompactId);
+        },
+        async addTeam(_obj, args: MutationAddTeamArgs, context: GraphQLContext): Promise<void> {
+            // TODO Validate input, user and auth
+            const logCompactId = "TOURNAMENT_TEAM_" + args.data.tournamentId + "_" + args.data.teamId;
+            const now = new Date().toISOString();
+            await context.scheduleTopic.pushMessageToTopic({
+                type: "TOURNAMENT_TEAM",
+                meta: {
+                    ...args.data
+                },
+                occurredAt: now,
+            }, logCompactId);
+        },
+        async addPlayer(_obj, args: MutationAddPlayerArgs, context: GraphQLContext): Promise<void> {
+            // TODO Validate input, user and auth
+            const logCompactId = "PLAYER_" + args.data.playerId;
+            const now = new Date().toISOString();
+            await context.competitionTopic.pushMessageToTopic({
+                type: "PLAYER",
+                meta: {
+                    ...args.data
+                },
+                occurredAt: now,
+            }, logCompactId);
+        },
+        async addCompetition(_obj, args: MutationAddCompetitionArgs, context: GraphQLContext): Promise<void> {
+            // TODO Validate input, user and auth
+            const logCompactId = "COMPETITION_" + args.data.competitionId;
+            const now = new Date().toISOString();
+            await context.competitionTopic.pushMessageToTopic({
+                type: "COMPETITION",
+                meta: {
+                    ...args.data
+                },
+                occurredAt: now,
+            }, logCompactId);
+        },
+        async addPlayerCompeting(_obj, args: MutationAddPlayerCompetingArgs, context: GraphQLContext): Promise<void> {
+            // TODO Validate input, user and auth
+            const logCompactId = "PLAYER_COMPETING_" + args.data.playerId + "_" + args.data.competitionId;
+            const now = new Date().toISOString();
+            await context.competitionTopic.pushMessageToTopic({
+                type: "PLAYER_COMPETING",
+                meta: {
+                    ...args.data
+                },
+                occurredAt: now,
+            }, logCompactId);
+        },
+        
         async setMatchScore(_obj, args: MutationSetMatchScoreArgs, context: GraphQLContext): Promise<void> {
             // TODO Validate input, user and auth
             const logCompactId = "SCORE_" + args.data.tournamentId + "_" + args.data.matchId;

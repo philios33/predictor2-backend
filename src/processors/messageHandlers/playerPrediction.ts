@@ -48,19 +48,31 @@ export class PlayerPredictionMessageHandler extends MessageHandler<"PLAYER_PREDI
         // but in the event of a forced prediction update by an admin, we may need to rebuild if the prediction should be visible on the page
         // If the prediction message timestamp is after kick off time, there is a chance that we need a rebuild.
         // BUT it would require 2 lookups to get the stage
-        const stageId = await getTournamentMatchStageValue(reader, tournamentId, matchId);
-        if (stageId === null) {
-            throw new Error("Stage unknown for match " + matchId + " in tournament " + tournamentId);
-        }
 
-        const match = await getTournamentMatch(reader, tournamentId, matchId, stageId);
-        if (match === null) {
-            throw new Error("Match unknown in stage " + stageId + " of tournament " + tournamentId);
-        }
+        let triggerAll = true;
+        try {
+            const stageId = await getTournamentMatchStageValue(reader, tournamentId, matchId);
+            if (stageId === null) {
+                throw new Error("Stage unknown for match " + matchId + " in tournament " + tournamentId);
+            }
 
-        const messageAt = new Date(message.occurredAt);
-        const kickOff = new Date(match.scheduledKickoff);
-        if (messageAt > kickOff) {
+            const match = await getTournamentMatch(reader, tournamentId, matchId, stageId);
+            if (match === null) {
+                throw new Error("Match unknown in stage " + stageId + " of tournament " + tournamentId);
+            }
+
+            const messageAt = new Date(message.occurredAt);
+            const kickOff = new Date(match.scheduledKickoff);
+            if (messageAt > kickOff) {
+                
+            } else {
+                triggerAll = false;
+            }
+        } catch(e: any) {
+            // Soft fail due to missing data probably
+            console.warn("SOFT FAIL: " + e.message);
+        }
+        if (triggerAll) {
             await triggerRebuildAllPlayerTournamentCompetitionResults(reader, tournamentId, playerId, queues, schedule);
         }
 

@@ -68,7 +68,10 @@ export class CompetitionRebuildResultsMessageHandler extends MessageHandler<"COM
         const phases = await getTournamentPhasesStructure(reader, competition.tournamentId);
 
         if (phases === null) {
-            throw new Error("Missing tournament phases: " + competition.tournamentId);
+            // throw new Error("Missing tournament phases: " + competition.tournamentId);
+            // This should be a soft fail since all competitions get rebuilt after tournament phases update
+            console.warn("SOFT FAILed to rebuild results for competition: " + competitionId + " due to missing tournament phases: " + competition.tournamentId)
+            return;
         }
         // console.log("Phases", JSON.stringify(phases, null, 4));
 

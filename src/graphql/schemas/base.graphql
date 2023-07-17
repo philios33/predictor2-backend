@@ -1,6 +1,38 @@
 scalar void
 scalar JSON
 
+input TournamentInput {
+    tournamentId: String!
+    name: String!
+}
+
+input TournamentTeamInput {
+    tournamentId: String!
+    teamId: String!
+    name: String!
+    shortName: String!
+    logo48: String!
+    groups: [String!]!
+}
+
+input PlayerInput {
+    playerId: String!
+    name: String!
+    email: String!
+}
+
+input CompetitionInput {
+    competitionId: String!
+    tournamentId: String!
+    name: String!
+    adminPlayerId: String!
+}
+
+input PlayerCompetingInput {
+    playerId: String!
+    competitionId: String!
+}
+
 input MatchScoreInput {
     tournamentId: String!
     matchId: String!
@@ -53,6 +85,13 @@ input ClearUserPredictionInput {
 type Mutation {
     # These are the basic helper mutations to prove the concept
     # We probably wont have these so exposed in the graphql service like this
+
+    addTournament(data: TournamentInput!): void
+    addTeam(data: TournamentTeamInput!): void
+    addPlayer(data: PlayerInput!): void
+    addCompetition(data: CompetitionInput!): void
+    addPlayerCompeting(data: PlayerCompetingInput!): void
+
     setMatchScore(data: MatchScoreInput!): void
     clearMatchScore(data: ClearMatchScoreInput!): void
     setScheduledMatch(data: ScheduledMatchInput!): void

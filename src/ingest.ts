@@ -11,11 +11,10 @@ import { CompetitionTopicMessage } from "./topics/competition";
 import { RedisQueuesController, ReliableRedisClient } from "redis-state-management";
 import { MongoQueueSchedule } from "./processors/schedules/mongoQueueSchedule";
 import { System } from "./processors/system";
-import { getCodeVersionId, getEventSourceConfig, getSystemConfig } from "./config";
+import { getEventSourceConfig, getSystemConfig } from "./config";
 import { handleGracefulShutdownSignals } from "./shutdown";
 
 const eventsSourceConfig = getEventSourceConfig();
-const codeVersionId = getCodeVersionId();
 
 const schedule = new MongoRedisTopicConsumer<ScheduleTopicMessage>(eventsSourceConfig.mongoUrl, eventsSourceConfig.databaseName, "schedule", eventsSourceConfig.redisHost, eventsSourceConfig.redisPort);
 
@@ -24,7 +23,7 @@ schedule.addDebuggingHandler((type: string, message: string) => {
     console.log(now.toISOString() + " - Schedule - " + type + " - " + message);
 });
 
-const competition = new MongoRedisTopicConsumer<CompetitionTopicMessage>(eventsSourceConfig.mongoUrl, eventsSourceConfig.databaseName, "competition", eventsSourceConfig.redisHost, eventsSourceConfig.redisPort);
+const competition = new MongoRedisTopicConsumer<CompetitionTopicMessage>(eventsSourceConfig.mongoUrl, eventsSourceConfig.databaseName, "competitions", eventsSourceConfig.redisHost, eventsSourceConfig.redisPort);
 
 competition.addDebuggingHandler((type: string, message: string) => {
     const now = new Date();
@@ -34,8 +33,8 @@ competition.addDebuggingHandler((type: string, message: string) => {
 const systemConfig = getSystemConfig();
 
 const queuesClient = new ReliableRedisClient("Queues - Ingest", systemConfig.queuesRedisHost, systemConfig.queuesRedisPort);
-const queues = new RedisQueuesController(queuesClient, codeVersionId);
-const scheduler = new MongoQueueSchedule(codeVersionId, systemConfig.orchestratorMongoUrl);
+const queues = new RedisQueuesController(queuesClient, systemConfig.queuesNamespace);
+const scheduler = new MongoQueueSchedule(systemConfig.orchestratorMongoUrl, systemConfig.codeVersionId);
 const system = new System(queues, scheduler);
 
 (async () => {
@@ -49,9 +48,15 @@ const system = new System(queues, scheduler);
         competition.streamMessagesFrom(async (message) => {
             console.log("Found competition message: " + message.id);
             if (message.payload.type === "COMPETITION") {
-                system.addCompetition(message.payload.meta.competitionId, message.payload.meta.tournamentId, message.payload.meta.name, message.payload.meta.adminPlayerId);
+                await system.addCompetition(message.payload.meta.competitionId, message.payload.meta.tournamentId, message.payload.meta.name, message.payload.meta.adminPlayerId);
+            } else if (message.payload.type === "PLAYER") {
+                await system.addPlayer(message.payload.meta.playerId, message.payload.meta.name, message.payload.meta.email);
+            } else if (message.payload.type === "PLAYER_COMPETING") {
+                await system.addPlayerCompeting(message.payload.meta.playerId, message.payload.meta.competitionId);
+            } else if (message.payload.type === "PLAYER_PREDICTION") {
+                await  system.addPlayerMatchPrediction(message.payload.meta.playerId, message.payload.meta.tournamentId, message.payload.meta.matchId, message.payload.meta.prediction);            
             } else {
-                throw new Error("Cannot handle competition event type: " + message.payload.type);
+                throw new Error("Cannot handle competition event type: " + (message.payload as any).type);
             }
         }, null, () => {
             console.log("No more competition messages...");
@@ -63,9 +68,18 @@ const system = new System(queues, scheduler);
         schedule.streamMessagesFrom(async (message) => {
             console.log("Found schedule message: " + message.id);
             if (message.payload.type === "TOURNAMENT") {
-                system.addTournament(message.payload.meta.tournamentId, message.payload.meta.name);
+                await system.addTournament(message.payload.meta.tournamentId, message.payload.meta.name);
+            } else if (message.payload.type === "TOURNAMENT_TEAM") {
+                await system.addTeam(message.payload.meta.tournamentId, message.payload.meta.teamId, message.payload.meta.name, message.payload.meta.shortName, message.payload.meta.logo48, message.payload.meta.groups);
+            } else if (message.payload.type === "TOURNAMENT_MATCH_SCHEDULED") {
+                await system.addMatch(message.payload.meta.tournamentId, message.payload.meta.stageId, message.payload.meta.matchId, message.payload.meta.homeTeamId, message.payload.meta.awayTeamId, message.payload.meta.scheduledKickoff, message.payload.meta.groupId, message.payload.meta.status, message.payload.meta.statusMessage);
+            } else if (message.payload.type === "TOURNAMENT_MATCH_SCORE") {
+                // TODO fix this
+                if (message.payload.meta.score) {
+                    await system.addScore(message.payload.meta.tournamentId, message.payload.meta.matchId, message.payload.meta.score.homeGoals, message.payload.meta.score.awayGoals);
+                }
             } else {
-                throw new Error("Cannot handle schedule event type: " + message.payload.type);
+                throw new Error("Cannot handle schedule event type: " + (message.payload as any).type);
             }
         }, null, () => {
             console.log("No more schedule messages...");

@@ -1,6 +1,13 @@
 import { RedisQueuesController } from "redis-state-management";
-import { IncomingPlayerPrediction } from "./messageHandlers/playerPrediction";
+import { IncomingPlayerPrediction, PlayerPredictionMessage } from "./messageHandlers/playerPrediction";
 import { QueueProcessingSchedule } from "./schedules/queueProcessingSchedule";
+import { TournamentMatchScoreMessage } from "./messageHandlers/tournamentMatchScore";
+import { TournamentMessage } from "./messageHandlers/tournament";
+import { TournamentTeamMessage } from "./messageHandlers/tournamentTeam";
+import { TournamentMatchScheduledMessage } from "./messageHandlers/tournamentMatchScheduled";
+import { CompetitionMessage } from "./messageHandlers/competition";
+import { PlayerMessage } from "./messageHandlers/player";
+import { PlayerCompetingMessage } from "./messageHandlers/playerCompeting";
 
 export class System {
     queues: RedisQueuesController;
@@ -21,7 +28,7 @@ export class System {
                 name,
             },
             occurredAt: now.toISOString(),
-        });
+        } as TournamentMessage);
         await this.schedule.triggerQueueForProcessing(queueId);
     }
 
@@ -39,7 +46,7 @@ export class System {
                 groups,
             },
             occurredAt: now.toISOString(),
-        });
+        } as TournamentTeamMessage);
         await this.schedule.triggerQueueForProcessing(queueId);
     }
 
@@ -64,7 +71,7 @@ export class System {
                 statusMessage,
             },
             occurredAt: now.toISOString(),
-        });
+        } as TournamentMatchScheduledMessage);
         await this.schedule.triggerQueueForProcessing(queueId);
     }
 
@@ -76,13 +83,15 @@ export class System {
             meta: {
                 tournamentId,
                 matchId,
-                homeGoals,
-                awayGoals,
-                isFinalScore: true,
-                gameMinute: null,
+                score: {
+                    homeGoals,
+                    awayGoals,
+                    isFinalScore: true,
+                    gameMinute: null,
+                }
             },
             occurredAt: now.toISOString(),
-        });
+        } as TournamentMatchScoreMessage);
         await this.schedule.triggerQueueForProcessing(queueId);
     }
 
@@ -98,7 +107,7 @@ export class System {
                 adminPlayerId,
             },
             occurredAt: now.toISOString(),
-        });
+        } as CompetitionMessage);
         await this.schedule.triggerQueueForProcessing(queueId);
     }
 
@@ -113,7 +122,7 @@ export class System {
                 email,
             },
             occurredAt: now.toISOString(),
-        });
+        } as PlayerMessage);
         await this.schedule.triggerQueueForProcessing(queueId);
     }
 
@@ -127,7 +136,7 @@ export class System {
                 competitionId,
             },
             occurredAt: now.toISOString(),
-        });
+        } as PlayerCompetingMessage);
         await this.schedule.triggerQueueForProcessing(queueId);
     }
 
@@ -143,7 +152,7 @@ export class System {
                 prediction,
             },
             occurredAt: now.toISOString(),
-        });
+        } as PlayerPredictionMessage);
         await this.schedule.triggerQueueForProcessing(queueId);
     }
 }

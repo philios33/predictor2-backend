@@ -21,6 +21,7 @@
     "graphql": "^15.8.0",
     "graphql-http": "^1.20.0",
     "graphql-import-node": "^0.0.5",
+    "graphql-request": "^6.1.0",
     "mongodb": "^5.7.0",
     "redis-state-management": "^1.0.3",
     "streamable-topic": "^2.0.0",
