@@ -53,8 +53,9 @@ export class RebuildCompetitionTablePostPhaseJob extends JobProcessor {
             }
         }
 
-        // Note: Use these source items e.g. sources.allTeams.result rather than using this.storage to fetch things
+        // Note: Use these source items e.g. sources.tournamentStructure.result rather than using this.storage to fetch things
       
+        // Match scores are in the tournament phase tables
 
 
     }
