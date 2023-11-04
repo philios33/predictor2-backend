@@ -4,7 +4,7 @@
   "description": "The actual incoming events service and validation",
   "main": "index.js",
   "scripts": {
-    "test": "jest",
+    "test": "jest --runInBand --bail",
     "codegen": "graphql-codegen --config codegen.yml",
     "build": "rm -rf ./dist && npm run codegen && tsc && copyfiles -u 1 ./src/graphql/schemas/*.graphql ./dist/",
     "start": "node ./dist/server/src/index.js"
@@ -23,6 +23,7 @@
     "graphql-import-node": "^0.0.5",
     "graphql-request": "^6.1.0",
     "mongodb": "^5.7.0",
+    "object-hash": "^3.0.0",
     "redis-state-management": "^1.0.3",
     "streamable-topic": "^2.0.0",
     "uuid": "^9.0.0"
@@ -32,6 +33,8 @@
     "@graphql-codegen/typescript-resolvers": "^2.7.6",
     "@types/cors": "^2.8.13",
     "@types/express": "^4.17.17",
+    "@types/jest": "^29.5.7",
+    "@types/object-hash": "^3.0.5",
     "@types/uuid": "^9.0.2",
     "copyfiles": "^2.4.1",
     "ts-jest": "^29.1.1",
