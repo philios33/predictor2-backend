@@ -11,14 +11,6 @@ export class RebuildTournamentTablePostPhaseJob extends JobProcessor {
         const phaseId = jobMeta.phaseId;
         console.log("Rebuilding tournament table for tournament: " + tournamentId + " and phase: " + phaseId);
 
-        // Fetch current tournament phase structure to do rebuild check
-        const current = await this.storage.fetchTournamentTablesPostPhase(tournamentId, phaseId);
-        const rebuild = shouldRebuild(current, jobMeta.contentUpdates);
-        if (!rebuild) {
-            console.warn("Skipping rebuild");
-            return;
-        }
-
         const prevPhaseId = parseInt(phaseId, 10) - 1;
 
         // Get all source items
@@ -37,9 +29,20 @@ export class RebuildTournamentTablePostPhaseJob extends JobProcessor {
             }
         }
 
+        // This is where we cancel execution if the source hashes map matches what we currently have
+        // Fetch current tournament phase structure to do rebuild check
+        const current = await this.storage.fetchTournamentTablesPostPhase(tournamentId, phaseId);
+        const rebuild = shouldRebuild(current, sourceHashes);
+        if (!rebuild) {
+            console.warn("Skipping rebuild due to identical sourceHashes");
+            return;
+        }
+
         // Note: Use these source items e.g. sources.allTeams.result rather than using this.storage to fetch things
       
         const phase = sources.phaseStructure.result;
+        const prevPhase = sources.prevPhaseTables?.result || null;
+        const matchScores = sources.matchScores.result;
         const teams = sources.allTeams.result;
 
         // Obtain the groups from teams
@@ -83,8 +86,6 @@ export class RebuildTournamentTablePostPhaseJob extends JobProcessor {
             }
         }
         
-        const matchScores: Record<string, MatchScore | null> = sources.matchScores.result;
-
         // Loading complete
         // Apply all match scores to the cumulative data
         let isPhaseStarted = false;
@@ -137,7 +138,17 @@ export class RebuildTournamentTablePostPhaseJob extends JobProcessor {
         
         await this.storage.storeTournamentTablesPostPhase(result);
         
-        // TODO Fire appropriate events off here        
+        // Note: We don't trigger cross phase events from here.  We expect the appropriate enqueues to happen when source data is altered.
+        // So we don't need to trigger phase (phase+1) to rebuild here
+        // BUT, this data will likely effect all competitions of this tournament
+
+        await this.jobBus.enqueuePredictorEvent({
+            type: "REBUILT-TOURNAMENT-PHASE-TABLE",
+            meta: {
+                tournamentId,
+                phaseId,
+            }
+        });
     }
 }
 

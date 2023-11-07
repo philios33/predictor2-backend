@@ -1,32 +1,19 @@
-import { ContentUpdates, RebuildTournamentStructureJobMeta } from "../../lib/predictorJobBus";
-import { TournamentMatchWithTeams, TournamentPhaseStructure, TournamentTeam } from "../../lib/predictorStorage";
+import objectHash from "object-hash";
+import { RebuildTournamentStructureJobMeta } from "../../lib/predictorJobBus";
+import { ISODate, TournamentMatchWithTeams, TournamentPhaseStructure, TournamentTeam } from "../../lib/predictorStorage";
 import { JobProcessor } from "./jobProcessor";
 
-export function shouldRebuild(current: null | {meta: {sourceHashes: Record<string, string>}}, contentUpdates: ContentUpdates) : boolean {
-    let rebuild = false;
+export function shouldRebuild(current: null | {meta: {sourceHashes: Record<string, string>}}, latestSourceHashes: Record<string, string>) : boolean {
     if (current === null) {
-        rebuild = true;
+        return true;
     } else {
-        const sourceHashes = current.meta.sourceHashes;
-        // If the job meta contains no fresh change events, we can ignore execution
-        for (const contentUpdate of contentUpdates) {
-            if (contentUpdate.id in sourceHashes) {
-                if (sourceHashes[contentUpdate.id] === contentUpdate.contentHash) {
-                    // This source content is equal to what we have previously used
-                } else {
-                    rebuild = true;
-                    break;
-                }
-            } else {
-                // This update is for a source id that isn't currently used in the building of this data
-                // This could be a bug, or it could be because we are adding a new source
-                // We should rebuild just to be safe
-                rebuild = true;
-                break;
-            }
+        const currentSourceHashes = current.meta.sourceHashes;
+        if (objectHash(currentSourceHashes) === objectHash(latestSourceHashes)) {
+            return false;
+        } else {
+            return true;
         }
     }
-    return rebuild;
 }
 
 export class RebuildTournamentStructureJob extends JobProcessor {
@@ -34,18 +21,9 @@ export class RebuildTournamentStructureJob extends JobProcessor {
     async processJob(jobMeta: RebuildTournamentStructureJobMeta, timeNow: Date) {
         const tournamentId = jobMeta.tournamentId;
         console.log("Rebuilding structure for tournament: " + tournamentId + " and time now is " + timeNow);
-
-        // Fetch current tournament structure to do rebuild check
-        const current = await this.storage.fetchTournamentStructure(tournamentId);
-        const rebuild = shouldRebuild(current, jobMeta.contentUpdates);
-        if (!rebuild) {
-            console.warn("Skipping rebuild");
-            return;
-        }
-
+        
         // Get all source items
         const sources = {
-            tournament: await this.storage.sourceTournament(tournamentId),
             allTeams: await this.storage.sourceTournamentTeamsRecord(tournamentId),
             allMatches: await this.storage.sourceTournamentMatches(tournamentId),            
         }
@@ -56,11 +34,20 @@ export class RebuildTournamentStructureJob extends JobProcessor {
             sourceHashes[source.id] = source.contentHash;
         }
 
+        // This is where we cancel execution if the source hashes map matches what we currently have
+        // Fetch current tournament structure to do rebuild check
+        const current = await this.storage.fetchTournamentStructure(tournamentId);
+        const rebuild = shouldRebuild(current, sourceHashes);
+        if (!rebuild) {
+            console.warn("Skipping rebuild due to identical sourceHashes");
+            return;
+        }
+
         // Note: Use these source items e.g. sources.allTeams.result rather than using this.storage to fetch things
       
-        const tournament = sources.tournament.result;
         const allTeams = sources.allTeams.result;
         const allMatches = Object.values(sources.allMatches.result);
+
         // Order the matches by kickoff time
         allMatches.sort((match1, match2) => {
             return (new Date(match1.scheduledKickoff.isoDate)).getTime() - (new Date(match2.scheduledKickoff.isoDate)).getTime();
@@ -95,7 +82,7 @@ export class RebuildTournamentStructureJob extends JobProcessor {
                     tournamentId,
                     phaseId: phaseId.toString(),
                     earliestMatchKickoff: phaseMatches[0].scheduledKickoff,
-                    lastMatchKickoff: phaseMatches[phaseMatches.length - 1].scheduledKickoff,
+                    latestMatchKickoff: phaseMatches[phaseMatches.length - 1].scheduledKickoff,
                     includedStages: includedStages,
                     startingStages: startingStages,
                     matches: phaseMatches,
@@ -163,14 +150,18 @@ export class RebuildTournamentStructureJob extends JobProcessor {
         }
 
         const phaseBeforeStageStarts: Record<string, number> = {};
+        const phaseTimes: Record<string, {earliestMatchKickoff: ISODate, latestMatchKickoff: ISODate}> = {};
 
         // Write all the tournament phases
-        let lastPhaseId = 0;
         for (const [i, phase] of calculatedPhases.entries()) {
-            lastPhaseId = i;
             // Sanity check
             if (phase.phaseId !== i.toString()) {
                 throw new Error("Phase ID mismatch: " + phase.phaseId + " but we expected " + i.toString());
+            }
+
+            phaseTimes[phase.phaseId] = {
+                earliestMatchKickoff: phase.earliestMatchKickoff,
+                latestMatchKickoff: phase.latestMatchKickoff,
             }
 
             if (i > 0) {
@@ -188,16 +179,7 @@ export class RebuildTournamentStructureJob extends JobProcessor {
                 });
             }
 
-            await this.storage.storeTournamentPhaseStructure(phase);
-
-            // TODO Event firing
-            /*
-            if (alwaysEnqueuePhaseTables) {
-                // We trigger this regardless of whether the phase structure changed, because we MUST rebuild the phase tables in order
-                await this.jobBus.enqueueRebuildTournamentTablePostPhase(tournamentId, phase.phaseId);
-            }
-            */
-            
+            await this.storage.storeTournamentPhaseStructure(phase);            
         }
 
         // Finish with the final tournament structure
@@ -206,12 +188,20 @@ export class RebuildTournamentStructureJob extends JobProcessor {
                 isoDate: timeNow.toISOString(),
             },
             tournamentId,
+
             groupTeams,
-            lastPhaseId,
+            phaseTimes,
             phaseBeforeStageStarts,
 
             sourceHashes,
         });
+
+        await this.jobBus.enqueuePredictorEvent({
+            type: "REBUILT-TOURNAMENT-STRUCTURE",
+            meta: {
+                tournamentId
+            }
+        })
 
     }
 }

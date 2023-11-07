@@ -2,8 +2,8 @@ import objectHash from "object-hash";
 import { IEntityStorageEngine } from "./entityStorage";
 
 export type EntityType = "PLAYER" | "TOURNAMENT" | "TOURNAMENT-TEAM" | "TOURNAMENT-MATCH" | "TOURNAMENT-MATCH-SCORE" | 
-    "COMPETITION" | "PREDICTION" | "PLAYER-COMPETING" | IndexEntityType | BuiltEntityType;
-export type IndexEntityType = "PLAYER-COMPETITIONS" | "COMPETITION-PLAYERS"
+    "COMPETITION" | "PREDICTION" | "COMPETITION-PLAYER-COMPETING" | IndexEntityType | BuiltEntityType;
+export type IndexEntityType = "PLAYER-COMPETING"
 export type BuiltEntityType = "TOURNAMENT-STRUCTURE" | "TOURNAMENT-PHASE-STRUCTURE" | "TOURNAMENT-MATCH-PHASE" | "TOURNAMENT-TABLES-POST-PHASE" | "COMPETITION-TABLES-POST-PHASE"
 
 export type ISODate = {
@@ -12,6 +12,7 @@ export type ISODate = {
 export type Entity<T> = {
     partitionKey: string
     entityType: string
+    lookupId: string | null
     meta: T
 }
 
@@ -19,7 +20,7 @@ export type Player = {
     playerId: string
     name: string
     email: string
-    competitionIdList: Array<string>
+    // competitionIdList: Array<string> // This is not base data, it is derived data from the competing record
 }
 
 export type Tournament = {
@@ -93,7 +94,7 @@ export type Competition = {
     competitionId: string
     name: string
     adminPlayerId: string
-    competingPlayerIdList: Array<string>
+    // competingPlayerIdList: Array<string> // This is not base data, it is derived from the players that are competing
 }
 
 export type Competing = {
@@ -129,10 +130,11 @@ export class PredictorStorage {
         this.engine = engine;
     }
 
-    private async storeEntity<T>(entityType: EntityType, compositeId: Array<string>, meta: T) {
+    private async storeEntity<T>(entityType: EntityType, compositeId: Array<string>, lookupId: string | null, meta: T) {
         const entity : Entity<T> = {
             partitionKey: entityType + "_" + compositeId.join("_"),
             entityType,
+            lookupId,
             meta,
         }
         return await this.engine.storeEntity(entityType, compositeId, entity);
@@ -142,8 +144,8 @@ export class PredictorStorage {
         return await this.engine.fetchEntity<Entity<T>>(entityType, compositeId);
     }
 
-    private async fetchEntitiesByTournamentId<T>(entityType: EntityType, tournamentId: string) {
-        return await this.engine.findByTournamentId<Entity<T>>(entityType, tournamentId);
+    private async fetchEntitiesByLookupId<T>(entityType: EntityType, lookupId: string) {
+        return await this.engine.findByLookupId<Entity<T>>(entityType, lookupId);
     }
 
     private async removeEntity(entityType: EntityType, compositeId: Array<string>) {
@@ -152,7 +154,7 @@ export class PredictorStorage {
 
     // PLAYER
     async storePlayer(player: Player) {
-        return await this.storeEntity('PLAYER', [player.playerId], player);
+        return await this.storeEntity('PLAYER', [player.playerId], null, player);
     }
     async fetchPlayer(playerId: string) {
         return await this.fetchEntity<Player>('PLAYER', [playerId]);
@@ -164,7 +166,7 @@ export class PredictorStorage {
 
     // TOURNAMENT
     async storeTournament(tournament: Tournament) {
-        return await this.storeEntity('TOURNAMENT', [tournament.tournamentId], tournament);
+        return await this.storeEntity('TOURNAMENT', [tournament.tournamentId], null, tournament);
     }
     async fetchTournament(tournamentId: string) {
         return await this.fetchEntity<Tournament>('TOURNAMENT', [tournamentId]);
@@ -176,13 +178,13 @@ export class PredictorStorage {
 
     // TOURNAMENT TEAM
     async storeTournamentTeam(team: TournamentTeam) {
-        return await this.storeEntity('TOURNAMENT-TEAM', [team.tournamentId, team.teamId], team);
+        return await this.storeEntity('TOURNAMENT-TEAM', [team.tournamentId, team.teamId], team.tournamentId, team);
     }
     async fetchTournamentTeam(tournamentId: string, teamId: string) {
         return await this.fetchEntity<TournamentTeam>('TOURNAMENT-TEAM', [tournamentId, teamId]);
     }
     async fetchTournamentTeamsByTournamentId(tournamentId: string) {
-        return await this.fetchEntitiesByTournamentId<TournamentTeam>('TOURNAMENT-TEAM', tournamentId);
+        return await this.fetchEntitiesByLookupId<TournamentTeam>('TOURNAMENT-TEAM', tournamentId);
     }
     async removeTournamentTeam(tournamentId: string, teamId: string) {
         // Might be used in scenarios where the team was accidently added
@@ -191,13 +193,13 @@ export class PredictorStorage {
 
     // TOURNAMENT MATCH
     async storeTournamentMatch(match: TournamentMatch) {
-        return await this.storeEntity('TOURNAMENT-MATCH', [match.tournamentId, match.matchId], match);
+        return await this.storeEntity('TOURNAMENT-MATCH', [match.tournamentId, match.matchId], match.tournamentId, match);
     }
     async fetchTournamentMatch(tournamentId: string, matchId: string) {
         return await this.fetchEntity<TournamentMatch>('TOURNAMENT-MATCH', [tournamentId, matchId]);
     }
     async fetchTournamentMatchesByTournamentId(tournamentId: string) {
-        return await this.fetchEntitiesByTournamentId<TournamentMatch>('TOURNAMENT-MATCH', tournamentId);
+        return await this.fetchEntitiesByLookupId<TournamentMatch>('TOURNAMENT-MATCH', tournamentId);
     }
     async removeTournamentMatch(tournamentId: string, matchId: string) {
         throw new Error("Please 'store' a match with status of deleted to signify that it has been removed");
@@ -205,7 +207,7 @@ export class PredictorStorage {
 
     // TOURNAMENT MATCH SCORE
     async storeTournamentMatchScore(score: TournamentMatchScore) {
-        return await this.storeEntity('TOURNAMENT-MATCH-SCORE', [score.tournamentId, score.matchId], score);
+        return await this.storeEntity('TOURNAMENT-MATCH-SCORE', [score.tournamentId, score.matchId], null, score);
     }
     async fetchTournamentMatchScore(tournamentId: string, matchId: string) {
         return await this.fetchEntity<TournamentMatchScore>('TOURNAMENT-MATCH-SCORE', [tournamentId, matchId]);
@@ -216,7 +218,7 @@ export class PredictorStorage {
 
     // PREDICTION
     async storePrediction(prediction: Prediction) {
-        return await this.storeEntity('PREDICTION', [prediction.tournamentId, prediction.matchId, prediction.playerId], prediction);
+        return await this.storeEntity('PREDICTION', [prediction.tournamentId, prediction.matchId, prediction.playerId], null, prediction);
     }
     async fetchPrediction(tournamentId: string, matchId: string, playerId: string) {
         return await this.fetchEntity<Prediction>('PREDICTION', [tournamentId, matchId, playerId]);
@@ -227,84 +229,85 @@ export class PredictorStorage {
 
     // COMPETITION
     async storeCompetition(competition: Competition) {
-        return await this.storeEntity('COMPETITION', [competition.competitionId], competition);
+        return await this.storeEntity('COMPETITION', [competition.competitionId], competition.tournamentId, competition);
     }
     async fetchCompetition(competitionId: string) {
         return await this.fetchEntity<Competition>('COMPETITION', [competitionId]);
     }
     async fetchCompetitionsByTournamentId(tournamentId: string) {
-        return await this.fetchEntitiesByTournamentId<Competition>('COMPETITION', tournamentId);
+        return await this.fetchEntitiesByLookupId<Competition>('COMPETITION', tournamentId);
     }
     async removeCompetition(competitionId: string) {
         throw new Error("Please 'store' isDeleted true flag to signify competition deletion");
     }
 
     // COMPETING META
+    async storeCompetitionPlayerCompeting(competing: Competing) {
+        return await this.storeEntity('COMPETITION-PLAYER-COMPETING', [competing.competitionId, competing.playerId], competing.competitionId, competing);
+    }
+    async fetchCompetitionPlayerCompeting(competitionId: string, playerId: string) {
+        return await this.fetchEntity<Competing>('COMPETITION-PLAYER-COMPETING', [competitionId, playerId]);
+    }
+    async removeCompetitionPlayerCompeting(competitionId: string, playerId: string) {
+        // This wipes the whole competing record from memory as if they were never part of the competition
+        // I've decided to keep this incase it was a mistake, or if you want to kick someone
+        return await this.removeEntity('COMPETITION-PLAYER-COMPETING', [competitionId, playerId]);
+    }
+    async fetchCompetitionPlayersCompeting(competitionId: string) {
+        return await this.fetchEntitiesByLookupId<Competing>('COMPETITION-PLAYER-COMPETING', competitionId);
+    }
+
+    // Note: This is a reflected index of the same data but stored with a different lookup id
+    // It is rebuilt with an event bus predictor event
     async storePlayerCompeting(competing: Competing) {
-        return await this.storeEntity('PLAYER-COMPETING', [competing.playerId, competing.competitionId], competing);
+        return await this.storeEntity('PLAYER-COMPETING', [competing.playerId, competing.competitionId], competing.playerId, competing);
     }
     async fetchPlayerCompeting(playerId: string, competitionId: string) {
         return await this.fetchEntity<Competing>('PLAYER-COMPETING', [playerId, competitionId]);
     }
     async removePlayerCompeting(playerId: string, competitionId: string) {
-        // This wipes the whole competing record from memory as if they were never part of the competition
-        // I've decided to keep this incase it was a mistake, or if you want to kick someone
         return await this.removeEntity('PLAYER-COMPETING', [playerId, competitionId]);
     }
-
-    // REBUILT INDEXES FOLLOW
-    async storePlayerCompetitions(competitions: PlayerCompetitions) {
-        return await this.storeEntity('PLAYER-COMPETITIONS', [competitions.playerId], competitions);
-    }
     async fetchPlayerCompetitions(playerId: string) {
-        return await this.fetchEntity<PlayerCompetitions>('PLAYER-COMPETITIONS', [playerId]);
-    }
-    async removePlayerCompetitions(playerId: string) {
-        throw new Error("Please 'store' empty Record of player competitions");
+        return await this.fetchEntitiesByLookupId<Competing>('PLAYER-COMPETING', playerId);
     }
 
-    async storeCompetitionPlayers(players: CompetitionPlayers) {
-        return await this.storeEntity('COMPETITION-PLAYERS', [players.competitionId], players);
-    }
-    async fetchCompetitionPlayers(competitionId: string) {
-        return await this.fetchEntity<CompetitionPlayers>('COMPETITION-PLAYERS', [competitionId]);
-    }
-    async removeCompetitionPlayers(competitionId: string) {
-        throw new Error("Please 'store' empty Record of competition players");
-    }
-    
 
     // BUILT ENTITIES FOLLOW
     async storeTournamentStructure(structure: TournamentStructure) {
-        return await this.storeEntity('TOURNAMENT-STRUCTURE', [structure.tournamentId], structure);
+        return await this.storeEntity('TOURNAMENT-STRUCTURE', [structure.tournamentId], null, structure);
     }
     async fetchTournamentStructure(tournamentId: string) {
         return await this.fetchEntity<TournamentStructure>('TOURNAMENT-STRUCTURE', [tournamentId]);
     }
 
     async storeTournamentPhaseStructure(structure: TournamentPhaseStructure) {
-        return await this.storeEntity('TOURNAMENT-PHASE-STRUCTURE', [structure.tournamentId, structure.phaseId], structure);
+        return await this.storeEntity('TOURNAMENT-PHASE-STRUCTURE', [structure.tournamentId, structure.phaseId], structure.tournamentId, structure);
     }
     async fetchTournamentPhaseStructure(tournamentId: string, phaseId: string) {
         return await this.fetchEntity<TournamentPhaseStructure>('TOURNAMENT-PHASE-STRUCTURE', [tournamentId, phaseId]);
     }
+    async fetchTournamentPhaseStructuresByTournamentId(tournamentId: string) {
+        // Possibly not required, but we could do this here
+        return await this.fetchEntitiesByLookupId<TournamentPhaseStructure>('TOURNAMENT-PHASE-STRUCTURE', tournamentId);
+    }
 
     async storeTournamentMatchPhase(phase: TournamentMatchPhase) {
-        return await this.storeEntity('TOURNAMENT-MATCH-PHASE', [phase.tournamentId, phase.matchId], phase);
+        return await this.storeEntity('TOURNAMENT-MATCH-PHASE', [phase.tournamentId, phase.matchId], null, phase);
     }
     async fetchTournamentMatchPhase(tournamentId: string, matchId: string) {
         return await this.fetchEntity<TournamentMatchPhase>('TOURNAMENT-MATCH-PHASE', [tournamentId, matchId]);
     }
 
     async storeTournamentTablesPostPhase(tables: TournamentTablesPostPhase) {
-        return await this.storeEntity('TOURNAMENT-TABLES-POST-PHASE', [tables.tournamentId, tables.phaseId], tables);
+        return await this.storeEntity('TOURNAMENT-TABLES-POST-PHASE', [tables.tournamentId, tables.phaseId], null, tables);
     }
     async fetchTournamentTablesPostPhase(tournamentId: string, phaseId: string) {
         return await this.fetchEntity<TournamentTablesPostPhase>('TOURNAMENT-TABLES-POST-PHASE', [tournamentId, phaseId]);
     }
 
     async storeCompetitionTablesPostPhase(tables: CompetitionTablesPostPhase) {
-        return await this.storeEntity('COMPETITION-TABLES-POST-PHASE', [tables.competitionId, tables.phaseId], tables);
+        return await this.storeEntity('COMPETITION-TABLES-POST-PHASE', [tables.competitionId, tables.phaseId], null, tables);
     }
     async fetchCompetitionTablesPostPhase(competitionId: string, phaseId: string) {
         return await this.fetchEntity<CompetitionTablesPostPhase>('COMPETITION-TABLES-POST-PHASE', [competitionId, phaseId]);
@@ -438,6 +441,21 @@ export class PredictorStorage {
         }
     }
 
+    async sourceCompetitionPlayers(competitionId: string) {
+        const players = await this.fetchCompetitionPlayersCompeting(competitionId);
+        const competingMap: Record<string, Competing> = {};
+        for (const player of players) {
+            competingMap[player.meta.playerId] = player.meta;
+        }
+
+        const result = competingMap;
+        return {
+            id: "COMPETITION-PLAYERS_" + competitionId,
+            contentHash: objectHash(result),
+            result: result,
+        }
+    }
+
     async sourceCompetitionPredictions(competitionId: string, phaseId: string) {
         // First get the competition to obtain the tournamentId
         const competition = await this.fetchCompetition(competitionId);
@@ -447,11 +465,12 @@ export class PredictorStorage {
         const tournamentId = competition.meta.tournamentId;
 
         // Then get the competing players for this competition
-        const players = await this.fetchCompetitionPlayers(competitionId);
-        if (players === null) {
-            throw new Error("Cannot source predictions if missing competition players: " + competitionId);
+        const players = await this.fetchCompetitionPlayersCompeting(competitionId);
+        const competingMap: Record<string, Competing> = {};
+        for (const player of players) {
+            competingMap[player.meta.playerId] = player.meta;
         }
-        const playerIds = Object.keys(players.meta.players);
+        const playerIds = Object.keys(competingMap);
 
         // It is more efficient to get the tournament phase structure to get the list of matches and loop through them rather than getting every prediction ever for this tournament
         const phaseStructure = await this.fetchTournamentPhaseStructure(tournamentId, phaseId);
@@ -482,10 +501,16 @@ export class PredictorStorage {
     }
 }
 
+export type PhaseTime = {
+    earliestMatchKickoff: ISODate
+    latestMatchKickoff: ISODate
+}
+export type PhaseTimes = Record<string, PhaseTime>
+
 export type TournamentStructure = {
     tournamentId: string
     generatedAt: ISODate
-    lastPhaseId: number
+    phaseTimes: PhaseTimes
     phaseBeforeStageStarts: Record<string, number>
     groupTeams: Record<string, Record<string, TournamentTeam>> // An index of which teams are in which groups
 
@@ -580,7 +605,7 @@ export type TournamentPhaseStructure = {
     tournamentId: string
     phaseId: string
     earliestMatchKickoff: ISODate
-    lastMatchKickoff: ISODate
+    latestMatchKickoff: ISODate
     includedStages: Array<string>
     startingStages: Array<string>
     

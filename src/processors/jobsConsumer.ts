@@ -1,6 +1,7 @@
 import { GenericMeta, Job } from "../lib/jobsBusEngine";
-import { JobType, PredictorJobBus, RebuildCompetitionTablePostPhaseJobMeta, RebuildTournamentStructureJobMeta, RebuildTournamentTablePostPhaseJobMeta } from "../lib/predictorJobBus";
+import { JobType, PredictorEvent, PredictorJobBus, RebuildCompetitionTablePostPhaseJobMeta, RebuildTournamentStructureJobMeta, RebuildTournamentTablePostPhaseJobMeta } from "../lib/predictorJobBus";
 import { PredictorStorage } from "../lib/predictorStorage";
+import { PredictorEventProcessor } from "./jobs/predictorEventProcessor";
 import { RebuildCompetitionTablePostPhaseJob } from "./jobs/rebuildCompetitionTablePostPhase";
 import { RebuildTournamentStructureJob } from "./jobs/rebuildTournamentStructure";
 import { RebuildTournamentTablePostPhaseJob } from "./jobs/rebuildTournamentTablePostPhase";
@@ -19,7 +20,13 @@ export class JobsConsumer {
     async processJob(job: Job<GenericMeta>, timeNow: Date) : Promise<string> {
 
         const jobType = job.type as JobType;
-        if (jobType === "REBUILD-TOURNAMENT-STRUCTURE") {
+        if (jobType === "EVENT-OCCURRED") {
+            const eventJob = job as Job<PredictorEvent>;
+            const processor = new PredictorEventProcessor(this.storage, this.jobBus);
+            await processor.processJob(eventJob.meta, timeNow);
+            return "PREDICTOR-EVENT-" + eventJob.meta.type;
+
+        } else if (jobType === "REBUILD-TOURNAMENT-STRUCTURE") {
             const rtsJob = job as Job<RebuildTournamentStructureJobMeta>;
             const processor = new RebuildTournamentStructureJob(this.storage, this.jobBus);
             await processor.processJob(rtsJob.meta, timeNow);

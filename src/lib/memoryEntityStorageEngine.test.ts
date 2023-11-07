@@ -93,7 +93,7 @@ describe('Basic functionality', () => {
             }
         });
 
-        const results1 = await engine.findByTournamentId("TOURNAMENT", "1");
+        const results1 = await engine.findByLookupId("TOURNAMENT", "1");
         expect(results1).toEqual([{
             meta: {
                 tournamentId: "1",
@@ -106,7 +106,7 @@ describe('Basic functionality', () => {
             }
         }]);
 
-        const results2 = await engine.findByTournamentId("TOURNAMENT", "2");
+        const results2 = await engine.findByLookupId("TOURNAMENT", "2");
         expect(results2).toEqual([{
             meta: {
                 tournamentId: "2",

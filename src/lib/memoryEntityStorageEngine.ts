@@ -42,13 +42,13 @@ export class MemoryEntityStorageEngine implements IEntityStorageEngine {
         }
     }
 
-    findByTournamentId<T>(type: string, tournamentId: string): Promise<T[]> {
+    findByLookupId<T>(type: string, lookupId: string): Promise<T[]> {
         if (!(type in this.storage)) {
             return Promise.resolve([]);
         } else {
             const all = Object.values(this.storage[type]);
             const relevant = all.filter((item) => {
-                return item.meta.tournamentId === tournamentId;
+                return item.meta.lookupId === lookupId;
             });
             return Promise.resolve(relevant);
         }

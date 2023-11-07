@@ -17,7 +17,15 @@ export class PredictorActionsHandler {
             playerId,
             name,
             email,
-            competitionIdList: [],
+            // competitionIdList: [], // We shouldn't reset this
+            // TODO This would be where avatar image goes
+        });
+
+        await this.jobBus.enqueuePredictorEvent({
+            type: "PUT-PLAYER", 
+            meta: {
+                playerId
+            },
         });
     }
 
@@ -25,6 +33,13 @@ export class PredictorActionsHandler {
         await this.storage.storeTournament({
             tournamentId,
             name,
+        });
+
+        await this.jobBus.enqueuePredictorEvent({
+            type: "PUT-TOURNAMENT", 
+            meta: {
+                tournamentId
+            },
         });
     }
 
@@ -46,10 +61,15 @@ export class PredictorActionsHandler {
             tournamentId,
             name,
             adminPlayerId,
-            competingPlayerIdList: [],
+            // competingPlayerIdList: [],
         });
 
-        await this.rebuildCompetitionTables(competitionId);
+        await this.jobBus.enqueuePredictorEvent({
+            type: "PUT-COMPETITION", 
+            meta: {
+                competitionId,
+            },
+        });
     }
 
     async playerCompeting(playerId: string, competitionId: string, initialPhase: number, initialPoints: number) {
@@ -65,16 +85,26 @@ export class PredictorActionsHandler {
             throw new Error("Unknown competition id: " + competitionId);
         }
 
-        // This writes the entity PLAYER-COMPETING which contains competing meta data
-        // It will also ensure appropriate ids and meta are included in the indexed entities PLAYER-COMPETITIONS and COMPETITION-PLAYERS
+        // This writes the entity COMPETITION-PLAYER-COMPETING which contains competing meta data
 
-        await this.storage.storePlayerCompeting({
+        await this.storage.storeCompetitionPlayerCompeting({
             playerId,
             competitionId,
             initialPhase,
             initialPoints,
         });
 
+        // This event mirrors the competing object across to the index that uses playerId
+        await this.jobBus.enqueuePredictorEvent({
+            type: "PLAYER-COMPETING", 
+            meta: {
+                playerId,
+                competitionId,
+            },
+        });
+
+        // This logic should now be rebuilt using a processor
+        /*
         // Make sure that this player is in the competing list for this competition
         const players = await this.storage.fetchCompetitionPlayers(competitionId);
         let playersRecord: Record<string, {
@@ -131,6 +161,7 @@ export class PredictorActionsHandler {
         if (updated) {
             await this.rebuildCompetitionTables(competitionId);
         }
+        */
     }
 
     async playerNotCompeting(playerId: string, competitionId: string) {
@@ -150,6 +181,16 @@ export class PredictorActionsHandler {
         // It will also ensure appropriate ids and meta are removed from the indexed entities PLAYER-COMPETITIONS and COMPETITION-PLAYERS
         await this.storage.removePlayerCompeting(playerId, competitionId);
 
+        await this.jobBus.enqueuePredictorEvent({
+            type: "PLAYER-NOT-COMPETING", 
+            meta: {
+                playerId,
+                competitionId,
+            },
+        });
+
+        // Again, these two models should be rebuilt using a rebuild job processor
+        /*
         // Make sure that this player is NOT in the competing list for this competition
         const players = await this.storage.fetchCompetitionPlayers(competitionId);
         let playersRecord: Record<string, {
@@ -202,7 +243,11 @@ export class PredictorActionsHandler {
         if (updated) {
             await this.rebuildCompetitionTables(competitionId);
         }
+        */
     }
+
+    /*
+    // This is probably no longer relevant
 
     async rebuildCompetitionTables(competitionId: string) {
         // Rebuild competition tables for all of its phases
@@ -218,6 +263,7 @@ export class PredictorActionsHandler {
             }
         }
     }
+    */
 
     async putTournamentTeam(tournamentId: string, teamId: string, name: string, shortName: string, logo48: string, groupIds: Array<string>, rebuildType: "NEW_TEAM" | "META_UPDATED") {
         // Check that the tournament exists
@@ -235,7 +281,13 @@ export class PredictorActionsHandler {
             groupIds,
         });
 
-        // TODO Real event firing
+        await this.jobBus.enqueuePredictorEvent({
+            type: "PUT-TOURNAMENT-TEAM", 
+            meta: {
+                tournamentId,
+                teamId,
+            },
+        });
     }
 
     async putTournamentMatch(tournamentId: string, matchId: string, stageId: string, homeTeamId: string, awayTeamId: string, scheduledKickoff: ISODate, groupId: string, status: TournamentMatchStatus, statusMessage: string | null) {
@@ -269,8 +321,13 @@ export class PredictorActionsHandler {
             statusMessage,
         });
 
-        // Tournament structure WILL have changed
-        await this.jobBus.enqueueRebuildTournamentStructure(tournamentId);
+        await this.jobBus.enqueuePredictorEvent({
+            type: "PUT-TOURNAMENT-MATCH", 
+            meta: {
+                tournamentId,
+                matchId,
+            },
+        });
     }
     
     async putTournamentMatchScore(tournamentId: string, matchId: string, score: null | MatchScore) {
@@ -292,28 +349,13 @@ export class PredictorActionsHandler {
             score
         });
 
-        // Find the tournament structure first
-        const structure = await this.storage.fetchTournamentStructure(tournamentId);
-        if (structure === null) {
-            // The tournament structure might be being built as we speak and it may not have got the latest update
-            // But since this is a score update only, it should be fine
-            // await this.jobBus.enqueueRebuildTournamentStructure(tournamentId);
-        } else {
-            // Find the calculated phaseId of this match
-            const result = await this.storage.fetchTournamentMatchPhase(tournamentId, matchId);
-            if (result === null) {
-                // We are not yet aware of this matches phase.
-                // This can happen if the match has not been indexed properly in to a phase yet by a tournament structure build.
-                // When it is, the phase structures will be updated anyway and trigger table rebuilds
-                // So we should be able to ignore this one
-            } else {
-                const initialPhaseId = parseInt(result.meta.phaseId, 10);
-                const numOfPhases = structure.meta.contentHashOfPhases.length;
-                for (let phaseId=initialPhaseId; phaseId<numOfPhases; phaseId++) {
-                    await this.jobBus.enqueueRebuildTournamentTablePostPhase(tournamentId, phaseId.toString());
-                }
-            }
-        }
+        await this.jobBus.enqueuePredictorEvent({
+            type: "PUT-TOURNAMENT-MATCH-SCORE", 
+            meta: {
+                tournamentId,
+                matchId,
+            },
+        });
     }
 
     async putPlayerPrediction(playerId: string, tournamentId: string, matchId: string, prediction: null | PlayerPrediction) {
@@ -342,26 +384,13 @@ export class PredictorActionsHandler {
             prediction
         });
 
-        const structure = await this.storage.fetchTournamentStructure(tournamentId);
-        if (structure === null) {
-            // Ignore if no structure yet
-        } else {
-            // Find this matches phase
-            const phaseResult = await this.storage.fetchTournamentMatchPhase(tournamentId, matchId);
-            if (phaseResult === null) {
-                // This match is not indexed yet in to a phase
-                // It will be eventually, and the updates to phase structure (which happen at the same time) will trigger tournament table rebuilds and competition table rebuilds
-            } else {
-                // Find the competitions for this tournament
-                const competitions = await this.storage.fetchCompetitionsByTournamentId(tournamentId);
-                for (const competition of competitions) {
-                    const initialPhaseId = parseInt(phaseResult.meta.phaseId);
-                    const numOfPhases = structure.meta.contentHashOfPhases.length;
-                    for (let phaseId=initialPhaseId; phaseId<numOfPhases; phaseId++) {
-                        await this.jobBus.enqueueRebuildCompetitionTablePostPhase(competition.meta.competitionId, phaseId.toString());
-                    }
-                }
-            }
-        }
+        await this.jobBus.enqueuePredictorEvent({
+            type: "PUT-PLAYER-PREDICTION", 
+            meta: {
+                playerId,
+                tournamentId,
+                matchId,
+            },
+        });
     }
 }
