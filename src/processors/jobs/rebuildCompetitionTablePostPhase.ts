@@ -1,4 +1,5 @@
 import { RebuildCompetitionTablePostPhaseJobMeta } from "../../lib/predictorJobBus";
+import { CompetitionTablesPostPhase } from "../../lib/predictorStorage";
 import { JobProcessor } from "./jobProcessor";
 import { shouldRebuild } from "./rebuildTournamentStructure";
 
@@ -67,8 +68,28 @@ export class RebuildCompetitionTablePostPhaseJob extends JobProcessor {
         // TODO: Use the Match scores in the tournament phase tables along with the predictions to build the phase results table with points (using system set in the competition)
         // TODO: Also use the cumulative data in the prev competition phase to build player table results after this phase
 
+        // If a stage is starting during this phase, we put a snapshot of all group tables here
+        // This is then used later to work out bankers
+        const stageGroupLeagueSnapshotBefore = {}; // TODO
 
+        // TODO, and the other 4 things
 
+        const result: CompetitionTablesPostPhase = {
+            competitionId,
+            phaseId,
+
+            details: phaseStructure,
+            stageGroupLeagueSnapshotBefore,
+            
+            matchPlayerPredictions,
+            matchPlayerPoints,
+            playerTotalPoints,
+            standingsSnapshotAfter,
+
+            sourceHashes,
+        }
+
+        await this.storage.storeCompetitionTablesPostPhase(result);
     }
 }
 

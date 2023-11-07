@@ -65,11 +65,47 @@ export class PredictorEventProcessor extends JobProcessor {
 
         } else if (predictorEvent.type === "PUT-TOURNAMENT-MATCH-SCORE") {
             // We can lookup the match phase first so that we only rebuild from that phase up until the last active phase
-            // TODO Finish this
             const phase = await this.storage.fetchTournamentMatchPhase(predictorEvent.meta.tournamentId, predictorEvent.meta.matchId);
-
+            if (phase === null) {
+                throw new Error("Unknown match phase: " + predictorEvent.meta.matchId);
+            }
+            const phaseId = phase.meta.phaseId;
+            // Rebuilds phases from the phase of this match up until the last active phase
+            // Should also seep down to rebuild competition tables if anything changes there
+            await this.rebuildActivePhaseTablesForTournament(predictorEvent.meta.tournamentId, timeNow, phaseId);
 
         } else if (predictorEvent.type === "PUT-PLAYER-PREDICTION") {
+            // We can do a similar thing to the above.  Get the phase of the match, and rebuild all tournaments from that phase
+            const tournamentId = predictorEvent.meta.tournamentId;
+            const matchId = predictorEvent.meta.matchId;
+            const playerId = predictorEvent.meta.playerId;
+
+            const phase = await this.storage.fetchTournamentMatchPhase(tournamentId, matchId);
+            if (phase === null) {
+                throw new Error("Unknown match phase: " + matchId);
+            }
+            const phaseId = phase.meta.phaseId;
+
+            // Should we find the relevant competitions by tournament or get them by playerId
+            // We really want an intersect set here, so maybe lookup both?
+            const competitions = await this.storage.fetchCompetitionsByTournamentId(tournamentId);
+            const compIdsByTournament = competitions.map((competition) => {
+                return competition.meta.competitionId;
+            });
+            const competitions2 = await this.storage.fetchPlayerCompetitions(playerId);
+            const compIdsByPlayer = competitions2.map((competing) => {
+                return competing.meta.competitionId;
+            });
+
+            const intersectingCompetitionIds = compIdsByTournament.filter(x => compIdsByPlayer.includes(x));
+            
+            for (const competitionId of intersectingCompetitionIds) {
+                // We know the player is part of this competition, so there is no need to lookup the competition players and check the contentHash is different
+                // It is guaranteed to be different unless it is a noop, so we can simply trigger a rebuild for all phases
+                // Noops are deduplicated within the startup of the rebuild job that checks if anything has changed
+                // Note: Horizontal updates are never enqueued, so it is up to this to decide which phases are applicable
+                await this.rebuildActivePhaseTablesForCompetition(competitionId, timeNow, phaseId);
+            }
 
         } else if (predictorEvent.type === "REBUILT-TOURNAMENT-STRUCTURE") {
             // Trigger all tournament phase tables for this tournament
@@ -84,22 +120,19 @@ export class PredictorEventProcessor extends JobProcessor {
         }
     }
 
-    async rebuildActivePhaseTablesForTournament(tournamentId: string, timeNow: Date) {
-        
-        // Load the tournament structure to get the phases list and starting timestamps
-        const structure = await this.storage.fetchTournamentStructure(tournamentId);
-        if (structure === null) {
-            // No tournament structure exists yet, it is likely there is nothing to trigger at this point
-        } else {
-            // Trigger competition phase table rebuild for only the phases that have started
-            const phaseIds = getOrderedActivePhaseIds(structure.meta.phaseTimes, timeNow);
+    async rebuildActivePhaseTablesForTournament(tournamentId: string, timeNow: Date, startingAt: string = "0") {
+        try {
+            const phaseIds = await this.getOrderedActivePhaseIdsForTournament(tournamentId, timeNow, startingAt);
             for (const phaseId of phaseIds) {
                 await this.jobBus.enqueueRebuildTournamentTablePostPhase(tournamentId, phaseId);
             }
+        } catch(e) {
+            // Ignore if problems like missing structure
+            console.warn(e);
         }
     }
 
-    async rebuildActivePhaseTablesForCompetition(competitionId: string, timeNow: Date) {
+    async rebuildActivePhaseTablesForCompetition(competitionId: string, timeNow: Date, startingAt: string = "0") {
         // Lookup the competition to get the tournament
         const competition = await this.storage.fetchCompetition(competitionId);
         if (competition === null) {
@@ -107,30 +140,39 @@ export class PredictorEventProcessor extends JobProcessor {
         }
         const tournamentId = competition.meta.tournamentId;
     
+        // Trigger competition phase table rebuild for only the phases that have started
+        const phaseIds = await this.getOrderedActivePhaseIdsForTournament(tournamentId, timeNow, startingAt);
+        for (const phaseId of phaseIds) {
+            await this.jobBus.enqueueRebuildCompetitionTablePostPhase(competitionId, phaseId);
+        }
+    }
+
+    async getOrderedActivePhaseIdsForTournament(tournamentId: string, timeNow: Date, startingAt: string = "0") {
         // Load the tournament structure to get the phases list and starting timestamps
         const structure = await this.storage.fetchTournamentStructure(tournamentId);
         if (structure === null) {
             // No tournament structure exists yet, it is likely there is nothing to trigger at this point
+            throw new Error("No Tournament structure exists yet so we cant get phase id list");
         } else {
             // Trigger competition phase table rebuild for only the phases that have started
-            const phaseIds = getOrderedActivePhaseIds(structure.meta.phaseTimes, timeNow);
-            for (const phaseId of phaseIds) {
-                await this.jobBus.enqueueRebuildCompetitionTablePostPhase(competitionId, phaseId);
-            }
+            const phaseIds = getOrderedActivePhaseIds(structure.meta.phaseTimes, timeNow, startingAt);
+            return phaseIds;
         }
     }
 }
 
-
-
-function getOrderedActivePhaseIds(phaseTimes: PhaseTimes, timeNow: Date) : Array<string> {
+function getOrderedActivePhaseIds(phaseTimes: PhaseTimes, timeNow: Date, startingAt: string = "0") : Array<string> {
     // Phase times are a record and so are unordered, but we can sort the result before returning
+    const startAtNum = parseInt(startingAt, 10);
     const activePhaseIds = [];
     for (const phaseId in phaseTimes) {
         const time = phaseTimes[phaseId];
         const startTime = new Date(time.earliestMatchKickoff.isoDate);
-        if (startTime < timeNow) {
-            activePhaseIds.push(phaseId);
+        const phaseIdNum = parseInt(phaseId, 10);
+        if (phaseIdNum >= startAtNum) {
+            if (startTime < timeNow) {
+                activePhaseIds.push(phaseId);
+            }
         }
     }
 

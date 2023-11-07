@@ -46,7 +46,6 @@ export class RebuildTournamentTablePostPhaseJob extends JobProcessor {
         const teams = sources.allTeams.result;
 
         // Obtain the groups from teams
-        // TODO Add check that makes sure you cannot add a match for a group unless both teams are within that group first
         const groupTeams: Record<string, Record<string, TournamentTeam>> = {}
         for (const teamId in teams) {
             const team = teams[teamId];
@@ -74,15 +73,15 @@ export class RebuildTournamentTablePostPhaseJob extends JobProcessor {
             }
         } else {
 
-            if (sources.prevPhaseTables === null) {
+            if (prevPhase === null) {
                 console.warn("Previous phase tables not written yet, but we need them to calculate this phase, exiting!");
                 return;
                 // throw new Error("Cannot load tournament phase table for tournament: " + tournamentId + " and prev phase " + prevPhaseId + " but we need it to calculate the next phases table");
             }
-            const prevPhaseTable = sources.prevPhaseTables.result;
+            
             // Load all the cumulative group points stats across to the local value
-            for (const groupId in prevPhaseTable.cumGroupTeamPoints) {
-                cumGroupTeamPoints[groupId] = prevPhaseTable.cumGroupTeamPoints[groupId];
+            for (const groupId in prevPhase.cumGroupTeamPoints) {
+                cumGroupTeamPoints[groupId] = prevPhase.cumGroupTeamPoints[groupId];
             }
         }
         
@@ -92,22 +91,26 @@ export class RebuildTournamentTablePostPhaseJob extends JobProcessor {
         let isPhaseCompleted = true;
 
         for (const match of phase.matches) {
-            if (timeNow > new Date(match.scheduledKickoff.isoDate)) {
-                isPhaseStarted = true;
-            }
-
-            const score = matchScores[match.matchId] || null;
-            if (score !== null) {
-                if (score.isFinalScore) {
-                    // Match finished, apply match
-                    applyTeamStats(cumGroupTeamPoints[match.groupId], match.homeTeam, match.awayTeam, score.homeGoals, score.awayGoals);
+            
+            if (match.status === "MATCH_ON") {
+                if (timeNow > new Date(match.scheduledKickoff.isoDate)) {
+                    isPhaseStarted = true;
+                }
+                const score = matchScores[match.matchId] || null;
+                if (score !== null) {
+                    if (score.isFinalScore) {
+                        // Match finished, apply match
+                        applyTeamStats(cumGroupTeamPoints[match.groupId], match.homeTeam, match.awayTeam, score.homeGoals, score.awayGoals);
+                    } else {
+                        // Latest score, but not final
+                        isPhaseCompleted = false;
+                    }
                 } else {
-                    // Latest score, but not final
+                    // Unknown score, we assume it has not started yet, or we dont know the result
                     isPhaseCompleted = false;
                 }
             } else {
-                // Unknown score, we assume it has not started yet, or we dont know the result
-                isPhaseCompleted = false;
+                // Match is NOT on, ignore it
             }
         }
         if (!isPhaseStarted) {

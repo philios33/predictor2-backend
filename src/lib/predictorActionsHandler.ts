@@ -309,6 +309,11 @@ export class PredictorActionsHandler {
             throw new Error("Unknown away team id: " + awayTeamId);
         }
 
+        // Make sure group id exists in both home and away teams list
+        if (!homeTeam.meta.groupIds.includes(groupId) || !awayTeam.meta.groupIds.includes(groupId)) {
+            throw new Error("The match groupId must be included in both teams groupIds list");
+        }
+
         await this.storage.storeTournamentMatch({
             tournamentId,
             matchId,
