@@ -25,7 +25,7 @@ export class MemoryEntityStorageEngine implements IEntityStorageEngine {
         if (!(idKey in this.storage[type])) {
             return Promise.resolve(null);
         } else {
-            return Promise.resolve(this.storage[type][idKey]);
+            return Promise.resolve(JSON.parse(JSON.stringify(this.storage[type][idKey])));
         }
     }
 
@@ -48,7 +48,7 @@ export class MemoryEntityStorageEngine implements IEntityStorageEngine {
         } else {
             const all = Object.values(this.storage[type]);
             const relevant = all.filter((item) => {
-                return item.meta.lookupId === lookupId;
+                return item.lookupId === lookupId; // The lookupId is stored at the root of the item, not in the metadata
             });
             return Promise.resolve(relevant);
         }

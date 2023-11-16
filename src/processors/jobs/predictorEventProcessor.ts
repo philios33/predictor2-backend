@@ -117,10 +117,48 @@ export class PredictorEventProcessor extends JobProcessor {
             for (const competition of competitions) {
                 await this.jobBus.enqueueRebuildCompetitionTablePostPhase(competition.meta.competitionId, predictorEvent.meta.phaseId);
             }
+
+        } else if (predictorEvent.type === "POSSIBLE-KICKOFFS") {
+            // Sometimes absolutely nothing changes in the data model, but the competitions need to update their public predictions due to a match kicking off within the tournament
+            // This should be handled by triggering all competitions for this tournament from the current phase
+            const tournament = await this.storage.fetchTournamentStructure(predictorEvent.meta.tournamentId);
+            if (tournament === null) {
+                throw new Error("Could not find tournament structure for: " + predictorEvent.meta.tournamentId);
+            }
+            
+            let lastPhaseStarted = null;
+            for (const phaseId in tournament.meta.phaseTimes) {
+                const phase = tournament.meta.phaseTimes[phaseId];
+                if (lastPhaseStarted === null) {
+                    if (new Date(phase.earliestMatchKickoff.isoDate) < timeNow) {
+                        lastPhaseStarted = phaseId;
+                    }
+                } else {
+                    if (new Date(phase.earliestMatchKickoff.isoDate) < timeNow) {
+                        // Is the one we are checking after the one we have?
+                        if (new Date(phase.earliestMatchKickoff.isoDate) > new Date(tournament.meta.phaseTimes[lastPhaseStarted].earliestMatchKickoff.isoDate)) {
+                            lastPhaseStarted = phaseId;
+                        }
+                    }
+                }
+            }
+
+            // It is important to first rebuild the tournament tables for this phase, because this may not have been done yet
+            // This actually rebuilds everything, just incase, but if we can be sure that this will run during every phase, we could use lastPhaseStarted || "0" here to be more efficient
+            await this.rebuildActivePhaseTablesForTournament(predictorEvent.meta.tournamentId, timeNow);
+            
+            // Trigger all relevant tournament competition phases from this phase
+            const competitions = await this.storage.fetchCompetitionsByTournamentId(predictorEvent.meta.tournamentId);
+            for (const competition of competitions) {
+                await this.rebuildActivePhaseTablesForCompetition(competition.meta.competitionId, timeNow, lastPhaseStarted || "0");
+            }
+        } else {
+            throw new Error("Unknown predictor event type: " + (predictorEvent as any).type);
         }
     }
 
     async rebuildActivePhaseTablesForTournament(tournamentId: string, timeNow: Date, startingAt: string = "0") {
+        console.log("Rebuilding from phase " + startingAt);
         try {
             const phaseIds = await this.getOrderedActivePhaseIdsForTournament(tournamentId, timeNow, startingAt);
             for (const phaseId of phaseIds) {
@@ -180,7 +218,7 @@ function getOrderedActivePhaseIds(phaseTimes: PhaseTimes, timeNow: Date, startin
     activePhaseIds.sort((a,b) => {
         const aNum = parseInt(a);
         const bNum = parseInt(b);
-        return bNum - aNum;
+        return aNum - bNum;
     });
 
     return activePhaseIds;

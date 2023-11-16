@@ -24,7 +24,23 @@ export class JobsConsumer {
             const eventJob = job as Job<PredictorEvent>;
             const processor = new PredictorEventProcessor(this.storage, this.jobBus);
             await processor.processJob(eventJob.meta, timeNow);
-            return "PREDICTOR-EVENT-" + eventJob.meta.type;
+
+            const anyMeta = eventJob.meta.meta as any;
+            const extra = [];
+            if (anyMeta.tournamentId) {
+                extra.push(anyMeta.tournamentId);
+            }
+            if (anyMeta.phaseId) {
+                extra.push(anyMeta.phaseId);
+            }
+            if (anyMeta.playerId) {
+                extra.push(anyMeta.playerId);
+            }
+            if (anyMeta.competitionId) {
+                extra.push(anyMeta.competitionId);
+            }
+
+            return "PREDICTOR-EVENT-" + eventJob.meta.type + "_" + extra.join("_");
 
         } else if (jobType === "REBUILD-TOURNAMENT-STRUCTURE") {
             const rtsJob = job as Job<RebuildTournamentStructureJobMeta>;

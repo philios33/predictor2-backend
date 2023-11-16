@@ -112,7 +112,14 @@ export type RebuiltTournamentStructureEvent = {
     }
 }
 
-export type PredictorEvent = PutPlayerEvent | PutTournamentEvent | PutCompetitionEvent | PlayerCompetingEvent | PlayerNotCompetingEvent | PutTournamentTeamEvent | PutTournamentMatchEvent | PutTournamentMatchScoreEvent | PutPlayerPredictionEvent | RebuiltPredictorPhaseTableEvent | RebuiltTournamentStructureEvent;
+export type PossibleKickoffsChangedEvent = {
+    type: "POSSIBLE-KICKOFFS",
+    meta: {
+        tournamentId: string
+    }
+}
+
+export type PredictorEvent = PutPlayerEvent | PutTournamentEvent | PutCompetitionEvent | PlayerCompetingEvent | PlayerNotCompetingEvent | PutTournamentTeamEvent | PutTournamentMatchEvent | PutTournamentMatchScoreEvent | PutPlayerPredictionEvent | RebuiltPredictorPhaseTableEvent | RebuiltTournamentStructureEvent | PossibleKickoffsChangedEvent;
 
 export type JobType = "EVENT-OCCURRED" | "REBUILD-TOURNAMENT-STRUCTURE" | "REBUILD-TOURNAMENT-TABLE-POST-PHASE" | "REBUILD-COMPETITION-TABLE-POST-PHASE";
 

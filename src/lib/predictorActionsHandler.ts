@@ -86,7 +86,6 @@ export class PredictorActionsHandler {
         }
 
         // This writes the entity COMPETITION-PLAYER-COMPETING which contains competing meta data
-
         await this.storage.storeCompetitionPlayerCompeting({
             playerId,
             competitionId,
@@ -177,10 +176,10 @@ export class PredictorActionsHandler {
             throw new Error("Unknown competition id: " + competitionId);
         }
 
-        // This removes the entity PLAYER-COMPETING
-        // It will also ensure appropriate ids and meta are removed from the indexed entities PLAYER-COMPETITIONS and COMPETITION-PLAYERS
-        await this.storage.removePlayerCompeting(playerId, competitionId);
+        // This removes the entity COMPETITION-PLAYER-COMPETING
+        await this.storage.removeCompetitionPlayerCompeting(competitionId, playerId);
 
+        // It will also ensure appropriate ids and meta are removed from the indexed entities PLAYER-COMPETITIONS and COMPETITION-PLAYERS
         await this.jobBus.enqueuePredictorEvent({
             type: "PLAYER-NOT-COMPETING", 
             meta: {
@@ -265,7 +264,7 @@ export class PredictorActionsHandler {
     }
     */
 
-    async putTournamentTeam(tournamentId: string, teamId: string, name: string, shortName: string, logo48: string, groupIds: Array<string>, rebuildType: "NEW_TEAM" | "META_UPDATED") {
+    async putTournamentTeam(tournamentId: string, teamId: string, name: string, shortName: string, logo48: string, groupIds: Array<string>) {
         // Check that the tournament exists
         const tournament = await this.storage.fetchTournament(tournamentId);
         if (tournament === null) {
@@ -396,6 +395,15 @@ export class PredictorActionsHandler {
                 tournamentId,
                 matchId,
             },
+        });
+    }
+
+    async triggerKickoffsChanged(tournamentId: string) {
+        await this.jobBus.enqueuePredictorEvent({
+            type: "POSSIBLE-KICKOFFS",
+            meta: {
+                tournamentId,
+            }
         });
     }
 }

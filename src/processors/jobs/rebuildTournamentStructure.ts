@@ -179,7 +179,7 @@ export class RebuildTournamentStructureJob extends JobProcessor {
                 });
             }
 
-            await this.storage.storeTournamentPhaseStructure(phase);            
+            await this.storage.storeTournamentPhaseStructure(phase);
         }
 
         // Finish with the final tournament structure

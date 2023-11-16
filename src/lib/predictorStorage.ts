@@ -442,10 +442,20 @@ export class PredictorStorage {
     }
 
     async sourceCompetitionPlayers(competitionId: string) {
+
         const players = await this.fetchCompetitionPlayersCompeting(competitionId);
-        const competingMap: Record<string, Competing> = {};
+        const competingMap: Record<string, { competing: Competing, player: CompetitionPlayer}> = {};
         for (const player of players) {
-            competingMap[player.meta.playerId] = player.meta;
+            const playerEntity = await this.fetchPlayer(player.meta.playerId);
+            if (playerEntity !== null) {
+                competingMap[player.meta.playerId] = {
+                    competing: player.meta,
+                    player: {
+                        playerId: playerEntity.meta.playerId,
+                        name: playerEntity.meta.name,
+                    }
+                }
+            }
         }
 
         const result = competingMap;
@@ -456,6 +466,73 @@ export class PredictorStorage {
         }
     }
 
+    async sourceRelevantPhaseSnapshots(tournamentId: string, phaseId: string) {
+        // We need to get all the stages that are starting at this phase and load the appropriate phase to get the snapshotted table out
+
+        const tournamentStructure = await this.fetchTournamentStructure(tournamentId);
+        if (tournamentStructure === null) {
+            throw new Error("Cannot source missing tournament structure: " + tournamentId);
+        }
+
+        const phaseStructure = await this.fetchTournamentPhaseStructure(tournamentId, phaseId);
+        if (phaseStructure === null) {
+            throw new Error("Cannot source missing tournament phase structure: " + phaseId);
+        }
+
+        const relevantPhaseSnapshots: Record<string, SnapshotsByGroup> = {};
+
+        const stageIds = phaseStructure.meta.includedStages;
+        for (const stageId of stageIds) {
+            if (stageId in tournamentStructure.meta.phaseBeforeStageStarts) {
+                const phaseIdNum: number = tournamentStructure.meta.phaseBeforeStageStarts[stageId];
+                const phaseId = phaseIdNum.toString();
+                if (!(phaseId in relevantPhaseSnapshots)) {
+                    const tables = await this.fetchTournamentTablesPostPhase(tournamentId, phaseId);
+                    if (tables === null) {
+                        throw new Error("Missing tournament tables for phase: " + phaseId);
+                    }
+                    relevantPhaseSnapshots[phaseId] = tables.meta.latestTables;
+                }
+            }
+        }
+
+        const result = relevantPhaseSnapshots;
+        return {
+            id: "TOURNAMENT-RELEVANT-PHASE-SNAPSHOTS_" + tournamentId + "_" + phaseId,
+            contentHash: objectHash(result),
+            result: result,
+        }
+    }
+
+    async sourceTournamentPhaseKickoffs(tournamentId: string, phaseId: string, timeNow: Date) {
+        const tournamentStructure = await this.fetchTournamentStructure(tournamentId);
+        if (tournamentStructure === null) {
+            throw new Error("Cannot source missing tournament structure: " + tournamentId);
+        }
+
+        const phaseStructure = await this.fetchTournamentPhaseStructure(tournamentId, phaseId);
+        if (phaseStructure === null) {
+            throw new Error("Cannot source missing tournament phase structure: " + phaseId);
+        }
+
+        const result: Record<string, string> = {};
+
+        for (const match of phaseStructure.meta.matches) {
+            if (match.status === "MATCH_ON") {
+                if (timeNow > new Date(match.scheduledKickoff.isoDate)) {
+                    result[match.matchId] = match.scheduledKickoff.isoDate;
+                }
+            }
+        }
+
+        return {
+            id: "TOURNAMENT-PHASE-KICKOFFS_" + tournamentId + "_" + phaseId,
+            contentHash: objectHash(result),
+            result: result,
+        }
+    }
+
+    
     async sourceCompetitionPredictions(competitionId: string, phaseId: string) {
         // First get the competition to obtain the tournamentId
         const competition = await this.fetchCompetition(competitionId);
@@ -583,7 +660,7 @@ export type CompetitionTablesPostPhase = {
     stageGroupLeagueSnapshotBefore: Record<string, Record<string, LeagueTableSnapshot>>
     // If a stage is starting during this phase, we put a snapshot of all group tables here
 
-    matchPlayerPredictions: Record<string, Record<string, PlayerPrediction>>
+    matchPlayerPredictions: Record<string, Record<string, PlayerPrediction | null>>
     matchPlayerPoints: Record<string, Record<string, PlayerPredictionResult>>
     playerTotalPoints: Record<string, number>
     standingsSnapshotAfter: Array<PlayerStandingsRow>
@@ -671,8 +748,14 @@ export type TournamentTablesPostPhase = {
     latestTables: SnapshotsByGroup
     cumGroupTeamPoints: Record<string, Record<string, TeamPointsRow>>
     matchScores: Record<string, MatchScore | null>
+
+    // Note: These are time based, so should not be in the tournament tables result
+    /*
     isPhaseStarted: boolean
     isPhaseCompleted: boolean
+    matchesKickedOff: number // The number of matches kicked off at this point.  This will change based on the execution time of the script.
+    */
+    // This might not be enough...
 
     sourceHashes: Record<string, string> // A record of the unique source ids to their content hashes that were used in the generation of this data
 }

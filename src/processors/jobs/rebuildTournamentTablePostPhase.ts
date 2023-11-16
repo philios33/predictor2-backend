@@ -87,35 +87,47 @@ export class RebuildTournamentTablePostPhaseJob extends JobProcessor {
         
         // Loading complete
         // Apply all match scores to the cumulative data
+
+        // These depend on the timeNow which means the script isn't deterministic enough
+        /*
         let isPhaseStarted = false;
         let isPhaseCompleted = true;
+        let matchesKickedOff = 0;
+        */
 
+        let matchesFinished = 0;
         for (const match of phase.matches) {
             
             if (match.status === "MATCH_ON") {
+                /*
                 if (timeNow > new Date(match.scheduledKickoff.isoDate)) {
                     isPhaseStarted = true;
+                    matchesKickedOff++;
                 }
+                */
                 const score = matchScores[match.matchId] || null;
                 if (score !== null) {
                     if (score.isFinalScore) {
                         // Match finished, apply match
+                        matchesFinished++;
                         applyTeamStats(cumGroupTeamPoints[match.groupId], match.homeTeam, match.awayTeam, score.homeGoals, score.awayGoals);
                     } else {
                         // Latest score, but not final
-                        isPhaseCompleted = false;
+                        // isPhaseCompleted = false;
                     }
                 } else {
                     // Unknown score, we assume it has not started yet, or we dont know the result
-                    isPhaseCompleted = false;
+                    // isPhaseCompleted = false;
                 }
             } else {
                 // Match is NOT on, ignore it
             }
         }
+        /*
         if (!isPhaseStarted) {
             isPhaseCompleted = false;
         }
+        */
 
         // Now for each group table, sort all the rows appropriately and make league tables based on the sum of home and away results
         const latestTables: Record<string, LeagueTableSnapshot> = {};
@@ -133,14 +145,15 @@ export class RebuildTournamentTablePostPhaseJob extends JobProcessor {
             cumGroupTeamPoints,
             latestTables,
             matchScores,
-            isPhaseStarted,
-            isPhaseCompleted,
+            // isPhaseStarted,
+            // isPhaseCompleted,
+            // matchesKickedOff,
 
             sourceHashes,
         }
         
         await this.storage.storeTournamentTablesPostPhase(result);
-        
+
         // Note: We don't trigger cross phase events from here.  We expect the appropriate enqueues to happen when source data is altered.
         // So we don't need to trigger phase (phase+1) to rebuild here
         // BUT, this data will likely effect all competitions of this tournament
