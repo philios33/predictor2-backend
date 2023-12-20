@@ -1,0 +1,5 @@
+/dist
+/node_modules
+lambdaFunc.zip
+notes.txt
+src/signedPath.ts

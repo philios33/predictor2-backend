@@ -9,5 +9,6 @@ const config: Config.InitialOptions = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   bail: true,
+  testPathIgnorePatterns: ["dist"],
 };
 export default config;

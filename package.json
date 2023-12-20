@@ -10,6 +10,9 @@
   "author": "Philip Nicholls <phil@code67.com>",
   "license": "ISC",
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.474.0",
+    "@aws-sdk/util-dynamodb": "^3.474.0",
+    "deep-diff-patcher": "^1.0.4",
     "dotenv": "^16.3.1",
     "object-hash": "^3.0.0",
     "uuid": "^9.0.0"

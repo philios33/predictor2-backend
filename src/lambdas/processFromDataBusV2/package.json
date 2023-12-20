@@ -1,0 +1,30 @@
+{
+  "name": "processfromdatabusv2",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "buildLibFiles": "../../../build.sh",
+    "build": "npm run buildLibFiles && rm -f ./lambdaFunc.zip && rm -rf dist && esbuild ./src/* --entry-names=index --external:@aws-sdk --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\" --format=esm --bundle --platform=node --target=es2020 --outdir=dist && cp ./package.json ./dist/package.json && cd dist && zip -r ../lambdaFunc.zip . && cd ..",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy": "aws lambda update-function-code --function-name processFromDataBusV2 --zip-file fileb:///mnt/c/repos/personal/predictor2-backend/src/lambdas/processFromDataBusV2/lambdaFunc.zip"
+  },
+  "type": "module",
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.130",
+    "@types/deep-equal": "^1.0.4",
+    "@types/node": "^20.10.5",
+    "@types/object-hash": "^3.0.6",
+    "esbuild": "^0.19.4",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.473.0",
+    "@aws-sdk/client-dynamodb": "^3.470.0",
+    "deep-diff-patcher": "^1.0.4",
+    "deep-equal": "^2.2.3",
+    "object-hash": "^3.0.0"
+  }
+}

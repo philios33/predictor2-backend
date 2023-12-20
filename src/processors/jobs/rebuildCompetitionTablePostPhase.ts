@@ -185,6 +185,9 @@ export class RebuildCompetitionTablePostPhaseJob extends JobProcessor {
                             // Calculate points
                             matchPlayerPoints[match.matchId][playerId] = this.calculatePoints(bankerMultiplier, playerPrediction, finalScore, playerPointsRows[playerId]);
 
+                            console.log("Player " + playerId + " (on " +  playerTotalPoints[playerId] + " points) got " + matchPlayerPoints[match.matchId][playerId].regularPoints + " regular points and " + matchPlayerPoints[match.matchId][playerId].bankerPoints + " banker points from match " + match.matchId);
+
+
                             // Sum with existing playerTotalPoints
                             playerTotalPoints[playerId] += matchPlayerPoints[match.matchId][playerId].regularPoints + matchPlayerPoints[match.matchId][playerId].bankerPoints;
                         }

@@ -139,7 +139,7 @@ export class RebuildTournamentTablePostPhaseJob extends JobProcessor {
         const result: TournamentTablesPostPhase = {
             tournamentId,
             phaseId,
-            generatedAt: {
+            generatedAt: { // Is this necessary?
                 isoDate: timeNow.toISOString(),
             },
             cumGroupTeamPoints,

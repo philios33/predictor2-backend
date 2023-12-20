@@ -161,6 +161,7 @@ export class PredictorEventProcessor extends JobProcessor {
         console.log("Rebuilding from phase " + startingAt);
         try {
             const phaseIds = await this.getOrderedActivePhaseIdsForTournament(tournamentId, timeNow, startingAt);
+            console.log("Phases are", phaseIds);
             for (const phaseId of phaseIds) {
                 await this.jobBus.enqueueRebuildTournamentTablePostPhase(tournamentId, phaseId);
             }
@@ -178,6 +179,7 @@ export class PredictorEventProcessor extends JobProcessor {
         }
         const tournamentId = competition.meta.tournamentId;
     
+        console.log("HERE???");
         // Trigger competition phase table rebuild for only the phases that have started
         const phaseIds = await this.getOrderedActivePhaseIdsForTournament(tournamentId, timeNow, startingAt);
         for (const phaseId of phaseIds) {

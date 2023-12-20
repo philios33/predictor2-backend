@@ -20,10 +20,17 @@ export class JobsConsumer {
     async processJob(job: Job<GenericMeta>, timeNow: Date) : Promise<string> {
 
         const jobType = job.type as JobType;
+        console.log("Processing next job: " + jobType);
         if (jobType === "EVENT-OCCURRED") {
             const eventJob = job as Job<PredictorEvent>;
             const processor = new PredictorEventProcessor(this.storage, this.jobBus);
-            await processor.processJob(eventJob.meta, timeNow);
+
+            try {
+                await processor.processJob(eventJob.meta, timeNow);
+            } catch(e) {
+                console.warn("JOB FAILED TO GET PROCESSED: " + jobType);
+                console.warn(e);
+            }
 
             const anyMeta = eventJob.meta.meta as any;
             const extra = [];
@@ -45,19 +52,34 @@ export class JobsConsumer {
         } else if (jobType === "REBUILD-TOURNAMENT-STRUCTURE") {
             const rtsJob = job as Job<RebuildTournamentStructureJobMeta>;
             const processor = new RebuildTournamentStructureJob(this.storage, this.jobBus);
-            await processor.processJob(rtsJob.meta, timeNow);
+            try {
+                await processor.processJob(rtsJob.meta, timeNow);
+            } catch(e) {
+                console.warn("JOB FAILED TO GET PROCESSED: " + jobType);
+                console.warn(e);
+            }
             return "REBUILD-TOURNAMENT-STRUCTURE_" + rtsJob.meta.tournamentId;
 
         } else if (jobType === "REBUILD-TOURNAMENT-TABLE-POST-PHASE") {
             const rttppJob = job as Job<RebuildTournamentTablePostPhaseJobMeta>;
             const processor = new RebuildTournamentTablePostPhaseJob(this.storage, this.jobBus);
-            await processor.processJob(rttppJob.meta, timeNow);
+            try {
+                await processor.processJob(rttppJob.meta, timeNow);
+            } catch(e) {
+                console.warn("JOB FAILED TO GET PROCESSED: " + jobType);
+                console.warn(e);
+            }
             return "REBUILD-TOURNAMENT-TABLE-POST-PHASE_" + rttppJob.meta.tournamentId + "_" + rttppJob.meta.phaseId;
 
         } else if (jobType === "REBUILD-COMPETITION-TABLE-POST-PHASE") {
             const rctppJob = job as Job<RebuildCompetitionTablePostPhaseJobMeta>;
             const processor = new RebuildCompetitionTablePostPhaseJob(this.storage, this.jobBus);
-            await processor.processJob(rctppJob.meta, timeNow);
+            try {
+                await processor.processJob(rctppJob.meta, timeNow);
+            } catch(e) {
+                console.warn("JOB FAILED TO GET PROCESSED: " + jobType);
+                console.warn(e);
+            }
             return "REBUILD-COMPETITION-TABLE-POST-PHASE" + rctppJob.meta.competitionId + "_" + rctppJob.meta.phaseId;
         
         } else {
